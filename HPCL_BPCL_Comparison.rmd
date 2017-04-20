@@ -1,0 +1,170 @@
+---
+title: "Share Price Comparison - Pairs Trading"
+author: "Ashutosh More"
+date: "April 10, 2017"
+output: html_document
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = TRUE,
+	warning = TRUE
+)
+```
+
+<h1>What is Pairs Trading?</h1>
+Pairs trading is a market-neutral trading strategy that matches a long position with a short position in a pair of highly correlated instruments such as two stocks, exchange-traded funds (ETFs), currencies, commodities or options. 
+Pairs traders wait for weakness in the correlation, and then go long on the under-performer while simultaneously going short on the over-performer, closing the positions as the relationship returns to its statistical norm.
+
+<h1>Now lets solve this myth!</h1>
+Now loading all required packages and data from a data file, here path will vary as per your environment where you have copied this attached data file.
+
+```{r}
+library(dplyr)
+library(plyr)
+library(plotly)
+
+HPCL_Data=read.csv("D:\\Ashutosh\\Personal\\study\\R-Language\\Share-Prices\\OIL-GAS\\01-04-2013-TO-31-03-2014HINDPETROALLN.csv")
+str(HPCL_Data)
+HPCL_Data$Date2 <- as.Date(as.character(HPCL_Data$Date), "%d-%b-%y")
+
+```
+
+
+<h3>Historical Stock Prices are Time Series data</h3>
+<h4>Determine Stationarity in Time Series Data (As Time Series data should be stationary in order to use it for any prediction, otherwise we cannot use that time series data for prediction) - Graphical Way</h4>
+
+We inspect HPCL share prices over time, whether they are non-stationary, if in ACF plot, if there is a small decay, then its a sign that our time series is non-stationary in nature.
+
+
+```{r}
+HPCL_BPCL_series<-ts(HPCL_Data$HPCL)
+plot(HPCL_BPCL_series,col="red")
+
+acf(HPCL_BPCL_series,col="blue")
+pacf(HPCL_BPCL_series)
+```
+
+We inspect BPCL share prices over time, whether they are non-stationary, if in ACF plot, if there is a small decay, then its a sign that our time series is non-stationary in nature.
+
+```{r}
+HPCL_BPCL_series<-ts(HPCL_Data$BPCL)
+plot(HPCL_BPCL_series,col="red")
+acf(HPCL_BPCL_series,col="blue")
+pacf(HPCL_BPCL_series)
+```
+
+<h4>Do Differencing</h4>
+So question is how many times Should Time Series Be Differenced to make it  Stationary? 
+
+```{r}
+
+#install.packages("forecast")
+library(forecast)
+ndiffs(HPCL_BPCL_series) # gives 2
+gdpdiff2<-diff(HPCL_BPCL_series,differences=ndiffs(HPCL_BPCL_series) )
+plot(gdpdiff2,col="red")
+acf(gdpdiff2, col="blue")
+```
+
+So in this case, stationarity is achieved using 1 order difference
+
+
+<h4>Determine Stationarity in Time Series Data - Statistical Way</h4>
+```{r}
+
+library(urca)
+df<-ur.df(HPCL_BPCL_series,lag=0)
+summary(df)
+
+```
+Since value of Test Statistics is greater than 5% critical value, we conclude that time series is non-stationary.
+
+Then we do differencing and check these statistics, again
+```{r}
+gdpdiff2<-diff(HPCL_BPCL_series,differences=ndiffs(HPCL_BPCL_series) )
+df<-ur.df(gdpdiff2,lag=0)
+summary(df)
+
+```
+OK, now since value of Test-statistics is less than 5% critical value, we conclude that after one level of differencing TS is now stationary.
+
+
+<h4>Correlation</h4>
+
+Correlation is a term from linear regression analysis that describes the strength of the relationship between a dependent variable and an independent variable. Central to pairs trading is the idea that if the two stocks (or other instruments) are correlated enough, any changes in correlation may be followed by a reversion to the pair’s mean trend, creating a profit opportunity. For example, stock A and stock B are highly correlated. If the correlation weakens temporarily – stock A moves up and stock B moves down – a pairs trader might exploit this divergence by shorting stock A (the over-performing issue) and going long on stock B (the under-performing issue). If the stocks revert to the statistical mean, the trader can profit.
+
+<h3>The importance of Co-Rrelation and Co-Integration</h3>
+Correlation measures the relationship between two instruments. We can see from Figure 1 that the HPCL NSE (in red) and BPCL NSE  (in green) futures contracts have prices that tend to move together, or that are correlated.
+
+<b>NOTE:</b> Data file which is used to load this contains share prices of these two skocks and also contains 1, 2, and -1, -2 standard deviations as attributes. This data file also contains price difference between these two share prices.
+
+
+
+```
+```{r}
+plot_ly(HPCL_Data) %>%
+  add_lines(alpha = 1, x = ~Date2, y = ~HPCL, name = "HPCL", line=list (color='Green')) %>%
+  add_lines(alpha = 1,x = ~Date2, y = ~BPCL, name = "BPCL", line=list (color='Red'))  %>%
+  layout(title = "HPCL BPCL Historical Price Comparison Showing Co-Relation",
+         xaxis = list(title = "Date"),
+         yaxis = list(title = "Price"))
+
+```
+
+<H2>Are these stocks co-integrated</H2>
+Using Engle Granger test, we can determine are these stocks are statistically co-integrated or not. Also using various plots one can determine the pattern in the data.
+
+```
+```{r}
+#install.packages("TTR")  
+#install.packages("egcm")  
+library(TTR)
+library(egcm)
+
+summary(egcm(HPCL_Data$HPCL, HPCL_Data$BPCL))   # Beta: 0.05
+plot(egcm(HPCL_Data$HPCL, HPCL_Data$BPCL))   # Beta: 0.05
+```
+
+
+<h2>Convergence Detection</h2>
+Now from below figure it is clearly evident that share price difference between these two stocks has converged beyound -1 standard deviation since Jul 1, which is a trading opportunity to make some profit. 
+
+Here we could have sold HPCL and buy more of BPCL stocks as we know that they are going to converge together 
+
+From attached data, also it is evident that, from Jul 1, 2016 there is this convergence which started forming and continued till towards the end of Sep 2016.
+
+
+```{r}
+
+plot_ly(HPCL_Data) %>%
+  add_lines(alpha = 1, x = ~Date2, y = ~X_2_STD, name = "-2 STD Dev", line=list (color='Blue')) %>%
+  add_lines(alpha = 1,x = ~Date2, y = ~X_1_STD, name = "-1 STD Dev", line=list (color='Green')) %>%
+  add_lines(alpha = 1,x = ~Date2, y = ~Price_Difference, name = "Price Difference", line=list (color='Pink')) %>%
+  add_lines(alpha = .50,x = ~Date2, y = ~X1_STD, name = "1 STD Dev", line=list (color='Red')) %>%
+  add_lines(alpha = .50, x = ~Date2, y = ~X2_STD, name = "2 STD Dev", line=list (color='Orange')) %>%
+  layout(title = "HPCL BPCL Convergence Detection",
+         xaxis = list(title = "Date"),
+         yaxis = list(title = "Price"))
+
+```
+
+<h2>Next Questions we should try to answer is that</h2>
+<b>1.</b> How long after this convergence we should put our money back into that stock which was over performer during this period, in this case it was HPCL? <br>
+<b>2.</b> How statistically determine which is a over performer and which is a under performer?<br>
+<b>3.</b> Does NSE allows us to download this data through Data API's?
+<b>4.</b> Can we detect this convergence automatically to benefit in our trade?
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+<H1>Resources</H1>
+This document is produced using R-Studio.<br>
+In R-Studio - R-Markdown is used to form this HTML<br>
+Using R and various packages used which are listed here to do all these statistical tests and plots<br>
+NSE Site for collecting the data for this analysis<br>
+
+
